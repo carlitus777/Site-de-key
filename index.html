@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111827">
+<title>Painel de Keys</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#e2e8f0; --mut:#94a3b8; --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b; --acc:#3b82f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:0; }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:var(--mut); margin:8px 0 4px; }
+  input, select { width:100%; padding:11px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--txt); font-size:16px; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  button { padding:11px 14px; border:0; border-radius:8px; background:var(--acc); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+  button.sec { background:#334155; }
+  button.bad { background:var(--bad); }
+  button.warn { background:var(--warn); color:#111; }
+  button.sm { padding:7px 10px; font-size:13px; }
+  button:disabled { opacity:.5; }
+  .full { width:100%; margin-top:12px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; font-weight:700; }
+  .b-ok { background:#14532d; color:#86efac; } .b-bad { background:#7f1d1d; color:#fca5a5; } .b-warn { background:#78350f; color:#fcd34d; }
+  .item-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .name { font-weight:700; font-size:17px; word-break:break-word; }
+  .mut { color:var(--mut); font-size:13px; }
+  code { background:#0b1220; padding:3px 7px; border-radius:6px; font-size:14px; word-break:break-all; }
+  .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .newkey { border-color:var(--ok); }
+  .hidden { display:none; }
+  #msg { position:fixed; left:12px; right:12px; bottom:12px; padding:12px; border-radius:10px; background:#0b1220; border:1px solid var(--line); text-align:center; z-index:9; }
+  #msg.err { border-color:var(--bad); color:#fca5a5; }
+  a { color:#93c5fd; }
+  ol { padding-left:20px; margin:6px 0; } li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🔑 Painel de Keys</h1>
+    <div><button class="sec sm" id="btnRefresh">Atualizar</button> <button class="sec sm" id="btnCfg">⚙️</button></div>
+  </header>
+
+  <!-- Configuração (aparece sozinha na primeira vez) -->
+  <section class="card hidden" id="cfgCard">
+    <b>Configuração (só uma vez)</b>
+    <p class="mut">Crie um token no GitHub: <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens</b>.
+    Em <i>Repository access</i> escolha só este repositório e em <i>Permissions → Contents</i> marque <b>Read and write</b>.</p>
+    <div class="row"><div><label>Usuário GitHub</label><input id="cOwner" autocapitalize="off"></div>
+    <div><label>Repositório</label><input id="cRepo" autocapitalize="off"></div></div>
+    <div class="row"><div><label>Branch</label><input id="cBranch" autocapitalize="off"></div>
+    <div><label>Arquivo das keys</label><input id="cPath" autocapitalize="off"></div></div>
+    <label>Token</label><input id="cToken" type="password" placeholder="github_pat_..." autocomplete="off">
+    <button class="full" id="btnSaveCfg">Salvar</button>
+    <p class="mut" id="rawInfo"></p>
+  </section>
+
+  <!-- Criar key -->
+  <section class="card" id="createCard">
+    <b>Nova key</b>
+    <label>Nome (ex: Kazuki)</label>
+    <input id="fName" placeholder="Nome da pessoa" maxlength="40">
+    <div class="row">
+      <div><label>Tempo</label><input id="fTime" type="number" min="1" step="any" value="14" inputmode="decimal"></div>
+      <div><label>Unidade</label><select id="fUnit"><option value="60">Minutos</option><option value="3600">Horas</option><option value="86400" selected>Dias</option></select></div>
+    </div>
+    <button class="full" id="btnCreate">Criar key</button>
+  </section>
+
+  <section class="card newkey hidden" id="newCard">
+    <div class="mut">Key criada para <b id="newName"></b> — copie agora:</div>
+    <p><code id="newKey"></code></p>
+    <button id="btnCopyNew">Copiar key</button>
+  </section>
+
+  <h3 style="margin:18px 0 8px;">Keys</h3>
+  <div id="list"><p class="mut">Carregando...</p></div>
+</div>
+<div id="msg" class="hidden"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+/* ---------- Configuração ---------- */
+function detect() {
+  let owner = "", repo = "";
+  if (location.hostname.endsWith(".github.io")) {
+    owner = location.hostname.split(".")[0];
+    repo = location.pathname.split("/")[1] || (owner + ".github.io");
+  }
+  return { owner, repo };
+}
+const d = detect();
+const cfg = {
+  owner:  LS.get("cfg_owner",  d.owner),
+  repo:   LS.get("cfg_repo",   d.repo),
+  branch: LS.get("cfg_branch", "main"),
+  path:   LS.get("cfg_path",   "keys.json"),
+  token:  LS.get("cfg_token",  "")
+};
+let state = { keys: [] };
+
+function showCfg(show) {
+  $("#cfgCard").classList.toggle("hidden", !show);
+  $("#cOwner").value = cfg.owner; $("#cRepo").value = cfg.repo;
+  $("#cBranch").value = cfg.branch; $("#cPath").value = cfg.path; $("#cToken").value = cfg.token;
+  $("#rawInfo").innerHTML = (cfg.owner && cfg.repo)
+    ? "Link para usar no script:<br><code>" + esc(rawUrl()) + "</code>" : "";
+}
+const rawUrl = () => `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cfg.path}`;
+
+/* ---------- Avisos ---------- */
+let msgTimer;
+function toast(text, isErr) {
+  const m = $("#msg"); m.textContent = text; m.className = isErr ? "err" : "";
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => m.classList.add("hidden"), isErr ? 6000 : 2500);
+}
+
+/* ---------- Utilidades ---------- */
+function toB64(str) {
+  const bytes = new TextEncoder().encode(str); let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function fromB64(b64) {
+  const bin = atob(b64.replace(/\s/g, "")); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function genKey() {
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const r = new Uint8Array(20); crypto.getRandomValues(r);
+  let s = ""; for (let i = 0; i < 20; i++) { s += abc[r[i] % abc.length]; if (i % 5 === 4 && i < 19) s += "-"; }
+  return s;
+}
+function fmtLeft(sec) {
+  if (sec <= 0) return "0min";
+  const dd = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  if (dd > 0) return `${dd}d ${h}h`; if (h > 0) return `${h}h ${m}min`; return `${m}min`;
+}
+const fmtDate = (sec) => new Date(sec * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const plainKeys = () => { try { return JSON.parse(LS.get("plain_keys", "{}")); } catch (e) { return {}; } };
+
+/* ---------- API do GitHub ---------- */
+function apiUrl(withRef) {
+  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURI(cfg.path)}` +
+    (withRef ? `?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}` : "");
+}
+async function errText(r) {
+  let t = ""; try { t = (await r.json()).message || ""; } catch (e) {}
+  if (r.status === 401) return "Token inválido ou expirado.";
+  if (r.status === 403 || r.status === 404) return "Sem permissão ou repositório não encontrado. Confira usuário, repositório e as permissões do token. " + t;
+  return `Erro ${r.status}. ${t}`;
+}
+async function readFile() {
+  const r = await fetch(apiUrl(true), { headers: { Authorization: "Bearer " + cfg.token, Accept: "application/vnd.github+json" }, cache: "no-store" });
+  if (r.status === 404) {
+    // 404 pode ser arquivo inexistente OU repositório errado; testa o repositório
+    const rr = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}`, { headers: { Authorization: "Bearer " + cfg.token } });
+    if (!rr.ok) throw new Error(await errText(rr));
+    return { data: { keys: [] }, sha: null };
+  }
+  if (!r.ok) throw new Error(await errText(r));
+  const j = await r.json(); let data;
+  try { data = JSON.parse(fromB64(j.content)); } catch (e) { data = { keys: [] }; }
+  if (!data || !Array.isArray(data.keys)) data = { keys: [] };
+  return { data, sha: j.sha };
+}
+async function writeFile(data, sha, message) {
+  const body = { message, content: toB64(JSON.stringify(data, null, 2)), branch: cfg.branch };
+  if (sha) body.sha = sha;
+  const r = await fetch(apiUrl(false), { method: "PUT", headers: { Authorization: "Bearer " + cfg.token, Accept: "application/vnd.github+json" }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = new Error(await errText(r)); e.status = r.status; throw e; }
+}
+/* Lê o arquivo atual, aplica a mudança e grava (tenta de novo se houver conflito) */
+async function mutate(fn, message) {
+  for (let i = 0; i < 3; i++) {
+    const { data, sha } = await readFile();
+    const result = fn(data);
+    try { await writeFile(data, sha, message); state = data; render(); return result; }
+    catch (e) { if (e.status === 409 || e.status === 422) continue; throw e; }
+  }
+  throw new Error("Conflito ao salvar. Tente de novo.");
+}
+
+/* ---------- Ações ---------- */
+async function load() {
+  if (!cfg.token || !cfg.owner || !cfg.repo) { showCfg(true); $("#list").innerHTML = '<p class="mut">Preencha a configuração acima.</p>'; return; }
+  try { const { data } = await readFile(); state = data; render(); }
+  catch (e) { $("#list").innerHTML = '<p class="mut">Não foi possível carregar.</p>'; toast(e.message, true); }
+}
+
+async function createKey() {
+  const name = $("#fName").value.trim();
+  const amount = parseFloat($("#fTime").value); const unit = parseInt($("#fUnit").value, 10);
+  if (!name) return toast("Digite o nome.", true);
+  if (!(amount > 0)) return toast("Digite um tempo válido.", true);
+  if (!cfg.token) return showCfg(true);
+  const btn = $("#btnCreate"); btn.disabled = true; btn.textContent = "Criando...";
+  try {
+    const key = genKey(); const hash = await sha256Hex(key); const created = nowSec();
+    const entry = { id: hash.slice(0, 10), name, hash, created, expires: created + Math.round(amount * unit), revoked: false };
+    await mutate((data) => { data.keys.push(entry); }, `Criar key: ${name}`);
+    const pk = plainKeys(); pk[hash] = key; LS.set("plain_keys", JSON.stringify(pk));
+    $("#newName").textContent = name; $("#newKey").textContent = key; $("#newCard").classList.remove("hidden");
+    $("#fName").value = ""; render(); toast("Key criada!");
+  } catch (e) { toast(e.message, true); }
+  btn.disabled = false; btn.textContent = "Criar key";
+}
+
+async function act(id, what) {
+  try {
+    if (what === "del") {
+      if (!confirm("Apagar esta key?")) return;
+      await mutate((data) => { data.keys = data.keys.filter((k) => k.id !== id); }, "Apagar key");
+    } else if (what === "pause") {
+      await mutate((data) => { const k = data.keys.find((x) => x.id === id); if (k) k.revoked = !k.revoked; }, "Pausar/ativar key");
+    } else if (what === "extend") {
+      const v = prompt("Adicionar quantos dias? (pode usar decimais, ex: 0.5)", "7"); if (v === null) return;
+      const days = parseFloat(v.replace(",", ".")); if (!(days > 0)) return toast("Valor inválido.", true);
+      await mutate((data) => { const k = data.keys.find((x) => x.id === id); if (k) k.expires = Math.max(k.expires, nowSec()) + Math.round(days * 86400); }, "Estender key");
+    }
+    toast("Salvo!");
+  } catch (e) { toast(e.message, true); }
+}
+
+function copy(text) {
+  const done = () => toast("Copiado!");
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast("Copie manualmente.", true); } t.remove();
+}
+
+/* ---------- Tela ---------- */
+function render() {
+  const el = $("#list"); const pk = plainKeys(); const now = nowSec();
+  const keys = [...state.keys].sort((a, b) => b.created - a.created);
+  if (!keys.length) { el.innerHTML = '<p class="mut">Nenhuma key ainda.</p>'; return; }
+  el.innerHTML = keys.map((k) => {
+    let badge;
+    if (k.revoked) badge = '<span class="badge b-warn">Pausada</span>';
+    else if (k.expires <= now) badge = '<span class="badge b-bad">Expirada</span>';
+    else badge = `<span class="badge b-ok">Ativa · ${fmtLeft(k.expires - now)}</span>`;
+    const plain = pk[k.hash];
+    return `<div class="card" data-id="${esc(k.id)}">
+      <div class="item-top"><span class="name">${esc(k.name)}</span>${badge}</div>
+      <div class="mut">Expira em ${fmtDate(k.expires)}</div>
+      ${plain ? `<p><code>${esc(plain)}</code></p>` : '<p class="mut">Key visível só no aparelho onde foi criada.</p>'}
+      <div class="acts">
+        ${plain ? '<button class="sm" data-a="copy">Copiar</button>' : ""}
+        <button class="sm sec" data-a="extend">+ Tempo</button>
+        <button class="sm warn" data-a="pause">${k.revoked ? "Ativar" : "Pausar"}</button>
+        <button class="sm bad" data-a="del">Apagar</button>
+      </div></div>`;
+  }).join("");
+}
+
+/* ---------- Eventos ---------- */
+$("#btnCreate").onclick = createKey;
+$("#btnRefresh").onclick = load;
+$("#btnCfg").onclick = () => showCfg($("#cfgCard").classList.contains("hidden"));
+$("#btnCopyNew").onclick = () => copy($("#newKey").textContent);
+$("#btnSaveCfg").onclick = () => {
+  cfg.owner = $("#cOwner").value.trim(); cfg.repo = $("#cRepo").value.trim();
+  cfg.branch = $("#cBranch").value.trim() || "main"; cfg.path = $("#cPath").value.trim() || "keys.json"; cfg.token = $("#cToken").value.trim();
+  LS.set("cfg_owner", cfg.owner); LS.set("cfg_repo", cfg.repo); LS.set("cfg_branch", cfg.branch); LS.set("cfg_path", cfg.path); LS.set("cfg_token", cfg.token);
+  showCfg(true); toast("Configuração salva."); load().then(() => { if (cfg.token) $("#cfgCard").classList.add("hidden"); });
+};
+$("#list").onclick = (e) => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const id = b.closest(".card").dataset.id; const a = b.dataset.a;
+  if (a === "copy") { const k = state.keys.find((x) => x.id === id); const p = k && plainKeys()[k.hash]; if (p) copy(p); }
+  else act(id, a);
+};
+
+showCfg(!cfg.token);
+load();
+setInterval(() => { if (state.keys.length) render(); }, 30000);
+</script>
+</body>
+</html>
