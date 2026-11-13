@@ -1,0 +1,98 @@
+import json, os, time, uuid
+from flask import Flask, request, jsonify, render_template_string, redirect, session, url_for, send_from_directory
+from werkzeug.security import generate_password_hash, check_password_hash
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "Dono_Secret_Key_2026")
+
+# Arquivos de Dados
+PLANS_FILE, KEYS_FILE, ADMINS_FILE = "plans.json", "keys.json", "admins.json"
+
+def load(file):
+    if not os.path.exists(file):
+        with open(file, "w") as f: json.dump({}, f)
+    try:
+        with open(file, "r") as f: return json.load(f)
+    except: return {}
+
+def save(file, data):
+    with open(file, "w") as f: json.dump(data, f, indent=2)
+
+# Inicializa o Dono
+def init_admins():
+    admins = load(ADMINS_FILE)
+    admins["owner"] = {"username": "exlity8829", "password": generate_password_hash("2099391"), "level": "owner"}
+    save(ADMINS_FILE, admins)
+init_admins()
+
+# Rotas PWA
+@app.route('/manifest.json')
+def serve_manifest(): return send_from_directory('static', 'manifest.json')
+
+@app.route('/sw.js')
+def serve_sw():
+    response = send_from_directory('static', 'sw.js')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+# Página de Geração Pública
+@app.route("/get_key")
+def public_get_key():
+    return render_template_string("""
+    <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerar Key Grátis</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#0d6efd">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }</script></head>
+    <body class="bg-light d-flex align-items-center justify-content-center" style="height:100vh;">
+        <div class="card p-4 shadow border-0 text-center" style="width:400px;">
+            <h3 class="mb-4">🔑 Gerar Key Grátis</h3><form id="genForm"><button type="submit" id="btnGen" class="btn btn-success btn-lg w-100">GERAR MINHA KEY</button></form>
+            <div id="result" class="mt-4 d-none"><div class="alert alert-success"><code id="keyDisplay" class="h4"></code></div><button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('keyDisplay').innerText);alert('Copiada!')">Copiar</button></div>
+        </div>
+        <script>document.getElementById('genForm').onsubmit = async (e) => { e.preventDefault(); const btn = document.getElementById('btnGen'); btn.disabled = true; btn.innerText = "Gerando..."; const res = await fetch('/public/create_key', { method: 'POST' }); const d = await res.json(); if (d.status === "ok") { document.getElementById('result').classList.remove('d-none'); document.getElementById('keyDisplay').innerText = d.key; btn.innerText = "Pronto!"; } else { alert(d.error || "Erro"); btn.disabled = false; btn.innerText = "Tentar Novamente"; }};</script>
+    </body></html>
+    """)
+
+# Endpoint de Verificação Roblox
+@app.route("/verify")
+def verify_key():
+    key = request.args.get("key")
+    if not key: return jsonify({"status": "invalid"})
+    keys, plans, now = load(KEYS_FILE), load(PLANS_FILE), time.time()
+    for k in keys.values():
+        if k.get("key") == key:
+            p = plans.get(k.get("plan_id"))
+            if not p or (p.get("expires_at") and p["expires_at"] < now) or k.get("banned"): return jsonify({"status": "invalid"})
+            expire_time = k.get("expire") or k.get("expires_at")
+            if expire_time and expire_time < now: return jsonify({"status": "expired"})
+            return jsonify({"status": "ok", "plan": p.get("plan", "basic")})
+    return jsonify({"status": "invalid"})
+
+# Rota de Login e Dashboards
+@app.route("/admin")
+def login_page():
+    return render_template_string("""
+    <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+    <body class="bg-light d-flex align-items-center justify-content-center" style="height:100vh;">
+        <div class="card p-4 shadow border-0" style="width:350px;"><h3 class="text-center mb-4">Painel Privado</h3>
+            <form method="POST" action="/login"><input name="usuario" class="form-control mb-2" placeholder="Usuário" required><input name="senha" type="password" class="form-control mb-3" placeholder="Senha" required><button type="submit" class="btn btn-dark w-100">Entrar</button></form>
+        </div></body></html>
+    """)
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.form; usuario, senha = data.get("usuario"), data.get("senha")
+    admins = load(ADMINS_FILE)
+    for a in admins.values():
+        if a["username"] == usuario and check_password_hash(a["password"], senha):
+            session.update({"user": usuario, "role": a.get("level", "mod")}); return redirect("/dashboard")
+    plans = load(PLANS_FILE)
+    for pid, p in plans.items():
+        if p["username"] == usuario and check_password_hash(p["password"], senha):
+            session.update({"user": usuario, "plan_id": pid, "role": "plan_owner", "plan_type": p.get("plan", "basic")}); return redirect("/plan/panel")
+    return "Erro", 401
+
+@app.route("/logout")
+def logout(): session.clear(); return redirect("/admin")
+
+if __name__ == "__main__": app.run(host="0.0.0.0", port=5000)
