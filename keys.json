@@ -1,12 +1,3 @@
 {
-  "keys": [
-    {
-      "id": "0020be6c5c",
-      "name": "Caua",
-      "hash": "0020be6c5cb869cf03445a780a94d5acedcbc4258a046e606d374821f437a2dd",
-      "created": 1794610528,
-      "expires": 1795820128,
-      "revoked": false
-    }
-  ]
+  "keys": []
 }
