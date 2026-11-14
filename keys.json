@@ -47,14 +47,6 @@
       "created": 1794610967,
       "expires": 865794524567,
       "revoked": false
-    },
-    {
-      "id": "99dede0054",
-      "name": "Guvhg",
-      "hash": "99dede00547374ab648811cda3f8cfcf05721c8e66cbde8735051a7bbac7a2d2",
-      "created": 1794610971,
-      "expires": 865794524571,
-      "revoked": false
     }
   ]
 }
