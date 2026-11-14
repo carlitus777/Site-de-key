@@ -39,14 +39,6 @@
       "created": 1794610916,
       "expires": 865794524516,
       "revoked": false
-    },
-    {
-      "id": "7bd419f8d8",
-      "name": "Fftdg",
-      "hash": "7bd419f8d8a93eee9248d366de1e6cbb1dbbc22c56e9c164da3c8fb07d35056f",
-      "created": 1794610967,
-      "expires": 865794524567,
-      "revoked": false
     }
   ]
 }
