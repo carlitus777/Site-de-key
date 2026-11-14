@@ -23,14 +23,6 @@
       "created": 1794610901,
       "expires": 865794524501,
       "revoked": false
-    },
-    {
-      "id": "9b5361c313",
-      "name": "Tvyg",
-      "hash": "9b5361c3136217f8a0eaf64b6d59f0db290d899842f87e155af6fd4f6f1e097d",
-      "created": 1794610909,
-      "expires": 865794524509,
-      "revoked": false
     }
   ]
 }
