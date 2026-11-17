@@ -1,14 +1,6 @@
 {
   "keys": [
     {
-      "id": "5c1d110d0e",
-      "name": "caua",
-      "hash": "5c1d110d0eb1fe572243e1494d26646de39a720755744bf3a1215971a8f68fc6",
-      "created": 1794650079,
-      "expires": 865794563679,
-      "revoked": false
-    },
-    {
       "id": "8f641b1a6f",
       "name": "caua",
       "hash": "8f641b1a6fbacdc16d2159ca492e8231a05a1de026354b2f651b9b2fb33bba26",
