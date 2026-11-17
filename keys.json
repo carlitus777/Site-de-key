@@ -198,7 +198,7 @@
       "hash": "0bd80d6d7457939a9ca2a67d9f21518fd06dfcbcc2f31cef658a45699e4016cd",
       "created": 1794913668,
       "expires": 1797505668,
-      "revoked": false
+      "revoked": true
     }
   ]
 }
