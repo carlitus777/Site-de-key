@@ -1,3 +1,12 @@
 {
-  "keys": []
+  "keys": [
+    {
+      "id": "1865a09a60",
+      "name": "Caua Garcia da Silva",
+      "hash": "1865a09a602cb78b803ea187e4e6d6ee338fdc05825127e238219b9e6ffb981e",
+      "created": 1794913315,
+      "expires": 865794826915,
+      "revoked": false
+    }
+  ]
 }
