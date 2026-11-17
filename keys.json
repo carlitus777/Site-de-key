@@ -7,14 +7,6 @@
       "created": 1794650106,
       "expires": 865794563706,
       "revoked": false
-    },
-    {
-      "id": "019d7d9fee",
-      "name": "caua",
-      "hash": "019d7d9fee723f83f687b4cb9f4b919fceaa8ea66df8f1f257f8827162aaf87e",
-      "created": 1794650115,
-      "expires": 865794563715,
-      "revoked": false
     }
   ]
 }
